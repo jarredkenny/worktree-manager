@@ -1,0 +1,239 @@
+import { $ } from "bun";
+import { HookManager } from './hooks';
+
+export interface WorktreeInfo {
+  path: string;
+  commit: string;
+  branch: string;
+  isBare?: boolean;
+}
+
+export class WorktreeManager {
+  private cwd: string;
+  private hookManager: HookManager;
+
+  constructor(cwd: string = process.cwd()) {
+    this.cwd = cwd;
+    this.hookManager = new HookManager(cwd);
+  }
+
+  async ensureBareRepo(): Promise<void> {
+    try {
+      const result = await $`git config --get core.bare`.cwd(this.cwd).quiet();
+      if (result.stdout.toString().trim() !== "true") {
+        throw new Error("This command must be run in a bare git repository");
+      }
+    } catch {
+      throw new Error("Not a git repository or not configured as bare");
+    }
+  }
+
+  async fetchBranch(branch: string): Promise<void> {
+    try {
+      await $`git fetch origin ${branch}:${branch}`.cwd(this.cwd);
+    } catch {
+      try {
+        await $`git fetch origin ${branch}`.cwd(this.cwd);
+      } catch {
+        console.warn(
+          `Warning: Could not fetch branch ${branch}. Proceeding with existing refs.`,
+        );
+      }
+    }
+  }
+
+  async createWorktree(name: string, baseBranch: string): Promise<void> {
+    await this.ensureBareRepo();
+
+    await this.fetchBranch(baseBranch);
+
+    const worktreePath = `${this.cwd}/${name}`;
+
+    try {
+      await $`git worktree add -b ${name} ${worktreePath} origin/${baseBranch}`.cwd(
+        this.cwd,
+      );
+      console.log(
+        `✅ Created worktree '${name}' based on '${baseBranch}' at ${worktreePath}`,
+      );
+    } catch (error) {
+      try {
+        await $`git worktree add -b ${name} ${worktreePath} ${baseBranch}`.cwd(
+          this.cwd,
+        );
+        console.log(
+          `✅ Created worktree '${name}' based on '${baseBranch}' at ${worktreePath}`,
+        );
+      } catch {
+        throw new Error(`Failed to create worktree: ${error}`);
+      }
+    }
+
+    // Execute post_create hook
+    await this.hookManager.executePostCreateHook({
+      worktreePath,
+      worktreeName: name,
+      baseBranch,
+      bareRepoPath: this.cwd
+    });
+  }
+
+  async checkoutWorktree(name: string): Promise<void> {
+    await this.ensureBareRepo();
+
+    const worktrees = await this.listWorktrees();
+    const existingWorktree = worktrees.find(
+      (w) => w.path.endsWith(`/${name}`) || w.branch === name,
+    );
+
+    if (existingWorktree) {
+      // Worktree already exists, just switch to it
+      try {
+        process.chdir(existingWorktree.path);
+        console.log(
+          `✅ Switched to worktree '${name}' at ${existingWorktree.path}`,
+        );
+        return;
+      } catch (error) {
+        throw new Error(`Failed to switch to worktree: ${error}`);
+      }
+    }
+
+    // Worktree doesn't exist, try to create it from remote or local branch
+    console.log(`Worktree '${name}' not found. Checking for remote branch...`);
+
+    try {
+      // Check if remote branch exists
+      await $`git ls-remote --heads origin ${name}`.cwd(this.cwd);
+      console.log(`Found remote branch 'origin/${name}'. Creating worktree...`);
+
+      // Check if local branch already exists
+      try {
+        await $`git show-ref --verify refs/heads/${name}`.cwd(this.cwd);
+        // Local branch exists, create worktree from it
+        const worktreePath = `${this.cwd}/${name}`;
+        await $`git worktree add ${worktreePath} ${name}`.cwd(this.cwd);
+        console.log(
+          `✅ Created worktree '${name}' from existing local branch at ${worktreePath}`,
+        );
+
+        // Execute post_create hook
+        await this.hookManager.executePostCreateHook({
+          worktreePath,
+          worktreeName: name,
+          baseBranch: name, // using the branch name as base branch in this case
+          bareRepoPath: this.cwd
+        });
+      } catch {
+        // Local branch doesn't exist, create worktree with new branch from remote
+        await this.createWorktree(name, name);
+      }
+
+      // Switch to the newly created worktree
+      const worktreePath = `${this.cwd}/${name}`;
+      process.chdir(worktreePath);
+      console.log(`✅ Switched to worktree '${name}' at ${worktreePath}`);
+    } catch (remoteError) {
+      // Remote branch doesn't exist, show helpful error
+      const availableWorktrees = worktrees
+        .filter((w) => !w.isBare)
+        .map((w) => w.branch);
+      throw new Error(
+        `Worktree '${name}' not found and no remote branch 'origin/${name}' exists.\n` +
+          `Available worktrees: ${availableWorktrees.join(", ")}\n` +
+          `To create a new worktree: wtm create ${name} --from <base_branch>`,
+      );
+    }
+  }
+
+  async listWorktrees(): Promise<WorktreeInfo[]> {
+    await this.ensureBareRepo();
+
+    try {
+      const result = await $`git worktree list --porcelain`.cwd(this.cwd);
+      const output = result.stdout.toString();
+
+      const worktrees: WorktreeInfo[] = [];
+      const blocks = output.split("\n\n").filter((block) => block.trim());
+
+      for (const block of blocks) {
+        const lines = block.split("\n");
+        const info: Partial<WorktreeInfo> = {};
+
+        for (const line of lines) {
+          if (line.startsWith("worktree ")) {
+            info.path = line.substring("worktree ".length);
+          } else if (line.startsWith("HEAD ")) {
+            info.commit = line.substring("HEAD ".length);
+          } else if (line.startsWith("branch ")) {
+            info.branch = line
+              .substring("branch ".length)
+              .replace("refs/heads/", "");
+          } else if (line === "bare") {
+            info.isBare = true;
+          }
+        }
+
+        if (info.path) {
+          worktrees.push({
+            path: info.path,
+            commit: info.commit || "unknown",
+            branch: info.branch || (info.isBare ? "(bare)" : "detached"),
+            isBare: info.isBare,
+          });
+        }
+      }
+
+      return worktrees;
+    } catch (error) {
+      throw new Error(`Failed to list worktrees: ${error}`);
+    }
+  }
+
+  async deleteWorktree(name: string, force: boolean = false): Promise<void> {
+    await this.ensureBareRepo();
+
+    const worktrees = await this.listWorktrees();
+    const worktree = worktrees.find(
+      (w) => w.path.endsWith(`/${name}`) || w.branch === name,
+    );
+
+    if (!worktree) {
+      throw new Error(`Worktree '${name}' not found`);
+    }
+
+    if (worktree.isBare) {
+      throw new Error(`Cannot delete bare repository`);
+    }
+
+    try {
+      const forceFlag = force ? "--force" : "";
+      await $`git worktree remove ${worktree.path} ${forceFlag}`.cwd(this.cwd);
+      console.log(`✅ Deleted worktree '${name}' at ${worktree.path}`);
+    } catch (error) {
+      throw new Error(
+        `Failed to delete worktree: ${error}. Try using --force flag.`,
+      );
+    }
+  }
+
+  printWorktrees(worktrees: WorktreeInfo[]): void {
+    if (worktrees.length === 0) {
+      console.log("No worktrees found");
+      return;
+    }
+
+    console.log("\nWorktrees:");
+    console.log("─".repeat(80));
+
+    for (const worktree of worktrees) {
+      const pathParts = worktree.path.split("/");
+      const name = pathParts[pathParts.length - 1];
+      const status = worktree.isBare ? "(bare)" : `[${worktree.branch}]`;
+      const commit = worktree.commit.substring(0, 9);
+
+      console.log(`${name.padEnd(30)} ${status.padEnd(20)} ${commit}`);
+    }
+  }
+}
+

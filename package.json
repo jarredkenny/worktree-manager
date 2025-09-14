@@ -1,0 +1,28 @@
+{
+  "name": "worktree-manager",
+  "version": "1.0.0",
+  "description": "Git worktree management CLI tool",
+  "main": "index.ts",
+  "module": "index.ts",
+  "type": "module",
+  "private": true,
+  "bin": {
+    "wtm": "./index.ts"
+  },
+  "scripts": {
+    "start": "bun run index.ts",
+    "dev": "bun --watch index.ts",
+    "build": "bun build index.ts --outdir ./dist --target bun",
+    "link": "bun link",
+    "unlink": "bun unlink"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "keywords": ["git", "worktree", "cli", "bun"],
+  "author": "Your Name",
+  "license": "MIT"
+}

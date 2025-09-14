@@ -1,0 +1,25 @@
+#!/bin/bash
+
+# Example post_create hook for worktree-manager
+# This hook runs after a new worktree is created
+
+echo "🪝 post_create hook executed!"
+echo "WORKTREE_DIR: $WORKTREE_DIR"
+echo "WORKTREE_NAME: $WORKTREE_NAME"
+echo "BASE_BRANCH: $BASE_BRANCH"
+echo "BARE_REPO_PATH: $BARE_REPO_PATH"
+echo "Current directory: $(pwd)"
+
+# Example: Install dependencies if package.json exists
+if [ -f "package.json" ]; then
+    echo "📦 Found package.json, running pnpm install..."
+    pnpm install
+fi
+
+# Example: Copy .env files from bare repo
+if [ -f "$BARE_REPO_PATH/.env.example" ]; then
+    echo "📄 Copying .env.example to .env..."
+    cp "$BARE_REPO_PATH/.env.example" ".env"
+fi
+
+echo "✅ post_create hook completed!"
