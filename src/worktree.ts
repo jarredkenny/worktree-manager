@@ -150,7 +150,7 @@ export class WorktreeManager {
     await this.ensureBareRepo();
 
     try {
-      const result = await $`git worktree list --porcelain`.cwd(this.cwd);
+      const result = await $`git worktree list --porcelain`.cwd(this.cwd).quiet();
       const output = result.stdout.toString();
 
       const worktrees: WorktreeInfo[] = [];
