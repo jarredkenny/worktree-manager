@@ -30,15 +30,34 @@ export class WorktreeManager {
 
   async fetchBranch(branch: string): Promise<void> {
     try {
-      await $`git fetch origin ${branch}:${branch}`.cwd(this.cwd);
-    } catch {
+      // Fetch the remote branch
+      await $`git fetch origin ${branch}`.cwd(this.cwd);
+      
+      // Get the latest commit hash from the remote
+      const remoteCommit = await $`git ls-remote origin ${branch}`.cwd(this.cwd);
+      const commitHash = remoteCommit.stdout.toString().split('\t')[0];
+      console.log(`Remote ${branch} is at: ${commitHash}`);
+      
+      // Check if local branch exists and update it
       try {
-        await $`git fetch origin ${branch}`.cwd(this.cwd);
+        await $`git show-ref --verify refs/heads/${branch}`.cwd(this.cwd);
+        console.log(`Local branch ${branch} exists, updating to match remote`);
+        // Local branch exists, force reset it to match the remote commit
+        await $`git update-ref refs/heads/${branch} ${commitHash}`.cwd(this.cwd);
+        
+        // Verify the update worked
+        const updatedRef = await $`git show-ref refs/heads/${branch}`.cwd(this.cwd);
+        console.log(`Updated local branch: ${updatedRef.stdout}`);
       } catch {
-        console.warn(
-          `Warning: Could not fetch branch ${branch}. Proceeding with existing refs.`,
-        );
+        console.log(`Local branch ${branch} doesn't exist, creating from remote`);
+        // Local branch doesn't exist, create it pointing to the remote commit
+        await $`git update-ref refs/heads/${branch} ${commitHash}`.cwd(this.cwd);
+        console.log(`Created local branch ${branch} at: ${commitHash}`);
       }
+    } catch (error) {
+      console.warn(
+        `Warning: Could not fetch branch ${branch}. Error: ${error}. Proceeding with existing refs.`,
+      );
     }
   }
 
@@ -56,6 +75,15 @@ export class WorktreeManager {
       console.log(
         `✅ Created worktree '${name}' based on '${baseBranch}' at ${worktreePath}`,
       );
+      
+      // Set up remote tracking branch in the worktree
+      try {
+        await $`git config branch.${name}.remote origin`.cwd(worktreePath);
+        await $`git config branch.${name}.merge refs/heads/${name}`.cwd(worktreePath);
+        await $`git fetch origin ${name}:refs/remotes/origin/${name}`.cwd(worktreePath);
+      } catch {
+        console.warn(`Warning: Could not set up remote tracking for branch ${name}`);
+      }
     } catch (error) {
       try {
         await $`git worktree add -b ${name} ${worktreePath} ${baseBranch}`.cwd(
@@ -67,6 +95,15 @@ export class WorktreeManager {
       } catch {
         throw new Error(`Failed to create worktree: ${error}`);
       }
+    }
+
+    // Set up remote tracking branch in the worktree
+    try {
+      await $`git config branch.${name}.remote origin`.cwd(worktreePath);
+      await $`git config branch.${name}.merge refs/heads/${name}`.cwd(worktreePath);
+      await $`git fetch origin ${name}:refs/remotes/origin/${name}`.cwd(worktreePath);
+    } catch {
+      console.warn(`Warning: Could not set up remote tracking for branch ${name}`);
     }
 
     // Execute post_create hook
@@ -114,6 +151,12 @@ export class WorktreeManager {
         await this.fetchBranch(name);
         const worktreePath = `${this.cwd}/${name}`;
         await $`git worktree add ${worktreePath} ${name}`.cwd(this.cwd);
+        
+        // Set up remote tracking branch in the worktree
+        await $`git config branch.${name}.remote origin`.cwd(worktreePath);
+        await $`git config branch.${name}.merge refs/heads/${name}`.cwd(worktreePath);
+        await $`git fetch origin ${name}:refs/remotes/origin/${name}`.cwd(worktreePath);
+        
         console.log(
           `✅ Created worktree '${name}' from existing local branch at ${worktreePath}`,
         );
