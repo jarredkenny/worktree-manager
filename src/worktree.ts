@@ -110,7 +110,8 @@ export class WorktreeManager {
       // Check if local branch already exists
       try {
         await $`git show-ref --verify refs/heads/${name}`.cwd(this.cwd);
-        // Local branch exists, create worktree from it
+        // Local branch exists, fetch latest changes and create worktree from it
+        await this.fetchBranch(name);
         const worktreePath = `${this.cwd}/${name}`;
         await $`git worktree add ${worktreePath} ${name}`.cwd(this.cwd);
         console.log(
