@@ -100,7 +100,15 @@ export class WorktreeManager {
     // Fork a new shell in the worktree directory
     try {
       console.log(`📁 Starting new shell in ${worktreePath}`);
-      await $`$SHELL`.cwd(worktreePath);
+      const shell = process.env.SHELL || '/bin/bash';
+      const proc = Bun.spawn([shell], {
+        cwd: worktreePath,
+        env: process.env,
+        stdin: 'inherit',
+        stdout: 'inherit',
+        stderr: 'inherit',
+      });
+      await proc.exited;
     } catch (error) {
       console.warn(`Warning: Could not start shell in ${worktreePath}: ${error}`);
     }
