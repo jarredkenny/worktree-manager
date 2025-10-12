@@ -168,8 +168,27 @@ export class WorktreeManager {
           bareRepoPath: this.cwd
         });
       } catch {
-        // Local branch doesn't exist, create worktree with new branch from remote
-        await this.createWorktree(name, name);
+        // Local branch doesn't exist, fetch remote branch to create local ref
+        await this.fetchBranch(name);
+        const worktreePath = `${this.cwd}/${name}`;
+        await $`git worktree add ${worktreePath} ${name}`.cwd(this.cwd);
+
+        // Set up remote tracking branch in the worktree
+        await $`git config branch.${name}.remote origin`.cwd(worktreePath);
+        await $`git config branch.${name}.merge refs/heads/${name}`.cwd(worktreePath);
+        await $`git fetch origin ${name}:refs/remotes/origin/${name}`.cwd(worktreePath);
+
+        console.log(
+          `✅ Created worktree '${name}' from remote branch at ${worktreePath}`,
+        );
+
+        // Execute post_create hook
+        await this.hookManager.executePostCreateHook({
+          worktreePath,
+          worktreeName: name,
+          baseBranch: name, // using the branch name as base branch in this case
+          bareRepoPath: this.cwd
+        });
       }
 
       // Switch to the newly created worktree
