@@ -48,16 +48,16 @@ USAGE:
   wtm <command> [args] [flags]
 
 COMMANDS:
-  create <name> --from <base_branch>    Create a new worktree
-  checkout <name>                       Switch to an existing worktree  
+  create <name> --from <base_branch>    Create a new worktree and spawn shell
+  checkout <name>                       Create worktree from remote branch
   list                                  List all worktrees
   delete <name> [--force]              Delete a worktree
   help                                  Show this help message
 
 EXAMPLES:
-  wtm create feature-auth --from main   Create worktree from main branch
-  wtm create hotfix-123 --from master  Create worktree from master branch
-  wtm checkout feature-auth             Switch to feature-auth worktree
+  wtm create feature-auth --from main   Create worktree from main (spawns new shell)
+  wtm create hotfix-123 --from master  Create worktree from master
+  wtm checkout feature-auth             Create worktree from remote branch feature-auth
   wtm list                             Show all worktrees
   wtm delete feature-auth              Delete worktree
   wtm delete feature-auth --force      Force delete worktree
@@ -66,6 +66,7 @@ FEATURES:
   • Automatically fetches latest changes from base branch
   • Works only in bare git repositories
   • Creates new branch for each worktree
+  • Spawns new shell in worktree after creation
   • Safe deletion with confirmation prompts
   • Clear status and error messages
   • Hook system: place executable scripts in bare repo root (e.g., post_create)

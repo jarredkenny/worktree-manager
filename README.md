@@ -63,18 +63,19 @@ bun run dev
 cd /path/to/your/bare-repo.git
 
 # Create a new worktree from main branch
+# This spawns a new shell in the worktree directory
 wtm create feature-auth --from main
 
-# List all worktrees
-wtm list
-
-# Switch to the worktree (if not automatically switched)
-wtm checkout feature-auth
-
-# Work on your feature...
+# Work on your feature in the new shell...
 # (edit files, make commits, etc.)
 
-# When done, clean up
+# Exit the shell when done
+exit
+
+# Back in the bare repository, list all worktrees
+wtm list
+
+# Clean up the worktree
 wtm delete feature-auth
 ```
 
@@ -82,7 +83,7 @@ wtm delete feature-auth
 
 ### `wtm create <name> --from <base_branch>`
 
-Creates a new worktree with a new branch based on the specified base branch.
+Creates a new worktree with a new branch based on the specified base branch, then spawns a new shell in that worktree.
 
 ```bash
 # Create worktree from main branch
@@ -101,23 +102,29 @@ wtm create review-pr --from feature-x
 3. Creates a new branch named `<name>`
 4. Creates a worktree directory at `./<name>`
 5. Executes `post_create` hook if present
+6. Spawns a new shell session in the worktree directory
+
+**Important:** This command starts a new shell in the worktree. When you're done working, use `exit` to return to your original shell in the bare repository.
 
 ### `wtm checkout <name>`
 
-Switches to an existing worktree or creates one if it doesn't exist.
+Creates a worktree from an existing remote branch if it doesn't already exist locally.
 
 ```bash
-# Switch to existing worktree
-wtm checkout feature-auth
-
-# If worktree doesn't exist but remote branch does, creates it automatically
+# Create worktree from existing remote branch
 wtm checkout existing-remote-branch
 ```
 
 **Behavior:**
-- If worktree exists: changes directory to worktree
-- If worktree doesn't exist but remote branch exists: creates worktree and switches
+- If worktree already exists: displays a success message (but does NOT change your shell's directory)
+- If worktree doesn't exist but remote branch exists: creates worktree from the remote branch
 - If neither exists: shows available worktrees and creation instructions
+
+**Important Note:** Due to how shells work, this command cannot change your current shell's directory. To work in a worktree:
+- Use `wtm create` which spawns a new shell in the worktree, OR
+- Manually `cd` into the worktree directory after creation
+
+This command is primarily useful for creating worktrees from existing remote branches without specifying a base branch.
 
 ### `wtm list`
 
@@ -264,35 +271,41 @@ wtm create review-pr-123 --from feature-branch
 ```
 
 ### CI/CD Environments
-Ideal for build systems that need to work with multiple branches:
+For automated build systems, you can use git worktree commands directly and use wtm for cleanup:
 
 ```bash
 # Build script
-wtm create build-$BUILD_ID --from $BRANCH_NAME
+git worktree add -b build-$BUILD_ID build-$BUILD_ID origin/$BRANCH_NAME
 cd build-$BUILD_ID
 # ... run build process ...
 cd ..
 wtm delete build-$BUILD_ID --force
 ```
 
+**Note:** `wtm create` spawns an interactive shell, so it's not suitable for automated scripts. Use git's native `worktree add` command for CI/CD, and `wtm delete` for cleanup.
+
 ### Feature Development
 Streamline your feature development workflow:
 
 ```bash
-# Start new feature
+# Start new feature (spawns new shell in worktree)
 wtm create feature-dashboard --from main
 
-# Work on feature...
+# Work on feature in the new shell...
 # (commits, testing, etc.)
 
-# Switch to another feature temporarily
-wtm checkout hotfix-urgent
+# Exit when done
+exit
 
-# Return to feature
-wtm checkout feature-dashboard
+# Back in bare repo, work on another feature if needed
+wtm create hotfix-urgent --from main
+
+# Work on hotfix...
+exit
 
 # Clean up when done
 wtm delete feature-dashboard
+wtm delete hotfix-urgent
 ```
 
 ## 🤝 Contributing

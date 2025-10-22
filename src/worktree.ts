@@ -122,16 +122,12 @@ export class WorktreeManager {
     );
 
     if (existingWorktree) {
-      // Worktree already exists, just switch to it
-      try {
-        process.chdir(existingWorktree.path);
-        console.log(
-          `✅ Switched to worktree '${name}' at ${existingWorktree.path}`,
-        );
-        return;
-      } catch (error) {
-        throw new Error(`Failed to switch to worktree: ${error}`);
-      }
+      // Worktree already exists
+      console.log(
+        `✅ Worktree '${name}' exists at ${existingWorktree.path}`,
+      );
+      console.log(`💡 To work in this worktree, run: cd ${existingWorktree.path}`);
+      return;
     }
 
     // Worktree doesn't exist, try to create it from remote or local branch
@@ -175,9 +171,7 @@ export class WorktreeManager {
         bareRepoPath: this.cwd
       });
 
-      // Switch to the newly created worktree
-      process.chdir(worktreePath);
-      console.log(`✅ Switched to worktree '${name}' at ${worktreePath}`);
+      console.log(`💡 To work in this worktree, run: cd ${worktreePath}`);
     } catch (remoteError) {
       // Remote branch doesn't exist, show helpful error
       const availableWorktrees = worktrees
