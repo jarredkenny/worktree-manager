@@ -29,11 +29,17 @@ Worktree Manager simplifies Git worktree operations, making it easy to work with
 ### Install from npm
 
 ```bash
-# Install globally using Bun
+# Install globally with your preferred package manager
 bun install -g @jx0/wtm
 
-# Or run directly without installing
-bunx @jx0/wtm
+# or
+pnpm add -g @jx0/wtm
+
+# or
+npm install -g @jx0/wtm
+
+# or
+yarn global add @jx0/wtm
 
 # Verify installation
 wtm help
@@ -99,6 +105,7 @@ wtm create review-pr --from feature-x
 ```
 
 **What it does:**
+
 1. Validates you're in a bare repository
 2. Fetches the latest changes from the base branch
 3. Creates a new branch named `<name>`
@@ -118,11 +125,13 @@ wtm checkout existing-remote-branch
 ```
 
 **Behavior:**
+
 - If worktree already exists: displays a success message (but does NOT change your shell's directory)
 - If worktree doesn't exist but remote branch exists: creates worktree from the remote branch
 - If neither exists: shows available worktrees and creation instructions
 
 **Important Note:** Due to how shells work, this command cannot change your current shell's directory. To work in a worktree:
+
 - Use `wtm create` which spawns a new shell in the worktree, OR
 - Manually `cd` into the worktree directory after creation
 
@@ -137,6 +146,7 @@ wtm list
 ```
 
 **Output:**
+
 ```
 Worktrees:
 ────────────────────────────────────────────────────────────────────────────────
@@ -158,6 +168,7 @@ wtm delete old-feature --force
 ```
 
 **Safety features:**
+
 - Cannot delete bare repository
 - Validates worktree exists before deletion
 - Force flag available for stuck worktrees
@@ -177,6 +188,7 @@ Worktree Manager supports executable hooks that run automatically during worktre
 Runs immediately after a worktree is created, with the working directory set to the new worktree.
 
 **Environment Variables:**
+
 - `$WORKTREE_DIR` - Absolute path to the new worktree
 - `$WORKTREE_NAME` - Name of the worktree
 - `$BASE_BRANCH` - Branch the worktree was created from
@@ -212,6 +224,7 @@ echo "✅ Worktree setup complete!"
 ```
 
 **Setup:**
+
 ```bash
 # Create the hook file in your bare repository
 vim post_create
@@ -237,6 +250,7 @@ worktree-manager/
 ```
 
 **Key Components:**
+
 - **WorktreeManager**: Core class handling Git operations
 - **HookManager**: Executes lifecycle hooks with proper environment
 - **CLI Parser**: Robust argument parsing and command routing
@@ -246,6 +260,7 @@ worktree-manager/
 Worktree Manager works out of the box with standard bare repositories. No configuration files needed.
 
 **Repository Requirements:**
+
 ```bash
 # Must be a bare repository
 git config core.bare true
@@ -259,13 +274,14 @@ git remote -v
 ## 🎯 Use Cases
 
 ### Development Server Workflows
+
 Perfect for shared development servers where multiple developers work on different features:
 
 ```bash
 # Developer 1
 wtm create user-authentication --from main
 
-# Developer 2  
+# Developer 2
 wtm create payment-integration --from main
 
 # Code review
@@ -273,6 +289,7 @@ wtm create review-pr-123 --from feature-branch
 ```
 
 ### CI/CD Environments
+
 For automated build systems, you can use git worktree commands directly and use wtm for cleanup:
 
 ```bash
@@ -287,6 +304,7 @@ wtm delete build-$BUILD_ID --force
 **Note:** `wtm create` spawns an interactive shell, so it's not suitable for automated scripts. Use git's native `worktree add` command for CI/CD, and `wtm delete` for cleanup.
 
 ### Feature Development
+
 Streamline your feature development workflow:
 
 ```bash
@@ -353,4 +371,5 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 **Made with ❤️ and [Bun](https://bun.sh/)**
 
-*Worktree Manager - Because managing Git worktrees shouldn't be a tree of problems* 🌳
+_Worktree Manager - Because managing Git worktrees shouldn't be a tree of problems_ 🌳
+
