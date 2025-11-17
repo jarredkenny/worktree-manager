@@ -1,18 +1,17 @@
 {
-  "name": "worktree-manager",
+  "name": "@jx0/wtm",
   "version": "1.0.0",
   "description": "Git worktree management CLI tool",
-  "main": "index.ts",
-  "module": "index.ts",
+  "main": "dist/index.js",
+  "module": "dist/index.js",
   "type": "module",
-  "private": true,
   "bin": {
-    "wtm": "./index.ts"
+    "wtm": "./dist/index.js"
   },
   "scripts": {
     "start": "bun run index.ts",
     "dev": "bun --watch index.ts",
-    "build": "bun build index.ts --outdir ./dist --target bun",
+    "build": "bun build index.ts --outdir ./dist --target bun --format esm",
     "link": "bun link",
     "unlink": "bun unlink"
   },
@@ -22,7 +21,13 @@
   "peerDependencies": {
     "typescript": "^5"
   },
+  "engines": {
+    "bun": ">=1.0.0"
+  },
+  "files": [
+    "dist"
+  ],
   "keywords": ["git", "worktree", "cli", "bun"],
-  "author": "Your Name",
+  "author": "Jarred Kenny <jarred.kenny@tracktile.io>",
   "license": "MIT"
 }

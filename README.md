@@ -26,16 +26,14 @@ Worktree Manager simplifies Git worktree operations, making it easy to work with
 - Git repository configured as bare (`git config core.bare true`)
 - Git remotes configured (typically `origin`)
 
-### Local Installation
+### Install from npm
 
 ```bash
-# Clone the repository
-git clone https://github.com/your-username/worktree-manager.git
-cd worktree-manager
+# Install globally using Bun
+bun install -g @jx0/wtm
 
-# Install and link globally
-bun install
-bun link
+# Or run directly without installing
+bunx @jx0/wtm
 
 # Verify installation
 wtm help
@@ -43,14 +41,18 @@ wtm help
 
 ### Development Setup
 
+For contributors who want to work on the source code:
+
 ```bash
-# Clone and install
+# Clone the repository
 git clone https://github.com/your-username/worktree-manager.git
 cd worktree-manager
 
-# Make executable and test
-chmod +x index.ts
-./index.ts help
+# Install dependencies
+bun install
+
+# Link for local development
+bun link
 
 # For development with auto-reload
 bun run dev
