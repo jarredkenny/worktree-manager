@@ -1,4 +1,5 @@
 import { WorktreeManager } from './worktree';
+import { CleanupManager } from './cleanup';
 
 export interface CliArgs {
   command: string;
@@ -51,16 +52,26 @@ COMMANDS:
   create <name> --from <base_branch>    Create a new worktree and spawn shell
   checkout <name>                       Create worktree from remote branch
   list                                  List all worktrees
-  delete <name> [--force]              Delete a worktree
+  delete <name> [--force]               Delete a worktree
+  cleanup [options]                     Find and delete merged worktrees
   help                                  Show this help message
+
+CLEANUP OPTIONS:
+  --base <branch>                       Base branch for merge detection (auto-detected)
+  --dry-run                             Show what would be deleted without deleting
+  --yes                                 Delete all merged worktrees without prompting
 
 EXAMPLES:
   wtm create feature-auth --from main   Create worktree from main (spawns new shell)
-  wtm create hotfix-123 --from master  Create worktree from master
+  wtm create hotfix-123 --from master   Create worktree from master
   wtm checkout feature-auth             Create worktree from remote branch feature-auth
-  wtm list                             Show all worktrees
-  wtm delete feature-auth              Delete worktree
-  wtm delete feature-auth --force      Force delete worktree
+  wtm list                              Show all worktrees
+  wtm delete feature-auth               Delete worktree
+  wtm delete feature-auth --force       Force delete worktree
+  wtm cleanup                           Find and delete merged worktrees interactively
+  wtm cleanup --base main               Use main as base branch for merge detection
+  wtm cleanup --dry-run                 Show what would be deleted
+  wtm cleanup --yes                     Delete all merged worktrees without prompting
 
 FEATURES:
   • Automatically fetches latest changes from base branch
@@ -94,7 +105,11 @@ export async function runCommand(parsedArgs: CliArgs): Promise<void> {
       case 'delete':
         await handleDelete(manager, args, flags);
         break;
-        
+
+      case 'cleanup':
+        await handleCleanup(flags);
+        break;
+
       case 'help':
       default:
         printHelp();
@@ -145,4 +160,14 @@ async function handleDelete(manager: WorktreeManager, args: string[], flags: Rec
   }
 
   await manager.deleteWorktree(name, force);
+}
+
+async function handleCleanup(flags: Record<string, string | boolean>): Promise<void> {
+  const manager = new CleanupManager();
+
+  await manager.run({
+    baseBranch: flags.base as string | undefined,
+    dryRun: !!flags['dry-run'],
+    yes: !!flags.yes,
+  });
 }
