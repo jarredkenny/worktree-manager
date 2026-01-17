@@ -29,5 +29,8 @@
   ],
   "keywords": ["git", "worktree", "cli", "bun"],
   "author": "Jarred Kenny <jarred.kenny@tracktile.io>",
-  "license": "MIT"
+  "license": "MIT",
+  "dependencies": {
+    "@inquirer/prompts": "^8.2.0"
+  }
 }
