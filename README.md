@@ -10,13 +10,13 @@ Worktree Manager simplifies Git worktree operations, making it easy to work with
 
 ## ✨ Features
 
-- 🚀 **Lightning fast** - Built with Bun for maximum performance
-- 🔒 **Bare repository focused** - Designed specifically for bare Git repositories
-- 🔄 **Smart branch management** - Automatic fetching and branch creation
-- 🪝 **Hook system** - Extensible post-creation hooks for automation
-- 📋 **Clear output** - Beautiful, informative command output
-- ⚡ **Zero dependencies** - Uses Bun's built-in shell capabilities
-- 🛡️ **Safe operations** - Comprehensive validation and error handling
+- **Lightning fast** - Built with Bun for maximum performance
+- **Bare repository focused** - Designed specifically for bare Git repositories
+- **Smart branch management** - Automatic fetching and branch creation
+- **Automatic cleanup** - Detect and remove merged worktrees safely
+- **Hook system** - Extensible post-creation hooks for automation
+- **Clear output** - Beautiful, informative command output
+- **Safe operations** - Comprehensive validation and error handling
 
 ## 📦 Installation
 
@@ -173,6 +173,65 @@ wtm delete old-feature --force
 - Validates worktree exists before deletion
 - Force flag available for stuck worktrees
 
+### `wtm cleanup [options]`
+
+Interactively find and delete worktrees whose branches have been merged upstream.
+
+```bash
+# Interactive mode - select which merged worktrees to delete
+wtm cleanup
+
+# Specify base branch for merge detection
+wtm cleanup --base main
+
+# Preview what would be deleted without actually deleting
+wtm cleanup --dry-run
+
+# Delete all merged worktrees without prompting
+wtm cleanup --yes
+```
+
+**Options:**
+
+| Flag | Description |
+|------|-------------|
+| `--base <branch>` | Base branch for merge detection (auto-detected from origin/HEAD by default) |
+| `--dry-run` | Show what would be deleted without deleting |
+| `--yes` | Delete all merged worktrees without interactive prompts |
+
+**A worktree is considered safe to delete when ALL of these are true:**
+
+1. **Merged upstream** - Branch commit is an ancestor of the base branch, OR the remote branch has been deleted (typically after a merge request is merged)
+2. **No uncommitted changes** - Working tree has no unstaged, staged, or untracked files
+3. **No unpushed commits** - No local commits that aren't reachable from the base branch
+
+**Protected branches** (never suggested for cleanup):
+- `main`, `master`, `next`, `prerelease`
+
+**Example workflow:**
+
+```bash
+$ wtm cleanup
+Using base branch: main
+Fetching latest from origin/main...
+Scanning worktrees for cleanup candidates...
+
+Found 2 worktree(s) safe to clean up:
+  - feature-auth [feature-auth]
+  - bugfix-123 [bugfix-123]
+
+? Select worktrees to delete:
+  [x] feature-auth [feature-auth]
+  [ ] bugfix-123 [bugfix-123]
+
+? Delete 1 worktree(s)? Yes
+
+Deleted worktree 'feature-auth' at /path/to/feature-auth
+Pruned stale worktree references.
+
+Cleanup complete. Deleted 1 worktree(s).
+```
+
 ### `wtm help`
 
 Shows comprehensive help information including examples and features.
@@ -243,6 +302,7 @@ worktree-manager/
 ├── src/
 │   ├── cli.ts           # Command parsing and routing
 │   ├── worktree.ts      # Core worktree operations
+│   ├── cleanup.ts       # Cleanup detection and UI
 │   └── hooks.ts         # Hook execution system
 ├── index.ts             # Main entry point
 ├── package.json         # Project configuration
@@ -252,6 +312,7 @@ worktree-manager/
 **Key Components:**
 
 - **WorktreeManager**: Core class handling Git operations
+- **CleanupManager**: Detects merged worktrees and handles cleanup flow
 - **HookManager**: Executes lifecycle hooks with proper environment
 - **CLI Parser**: Robust argument parsing and command routing
 
@@ -327,6 +388,23 @@ exit
 wtm delete feature-dashboard
 wtm delete hotfix-urgent
 ```
+
+### Periodic Cleanup
+
+Keep your bare repository tidy by periodically cleaning up merged worktrees:
+
+```bash
+# See what can be cleaned up
+wtm cleanup --dry-run
+
+# Interactively select and delete merged worktrees
+wtm cleanup
+
+# Or automatically clean up all merged worktrees (useful in scripts)
+wtm cleanup --yes
+```
+
+This is especially useful when working with merge request workflows - after your MRs are merged and the remote branches are deleted, `wtm cleanup` will detect these and offer to remove the local worktrees.
 
 ## 🤝 Contributing
 
