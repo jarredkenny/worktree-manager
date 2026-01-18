@@ -1,5 +1,6 @@
 import { WorktreeManager } from './worktree';
 import { CleanupManager } from './cleanup';
+import { InitManager } from './init';
 
 export interface CliArgs {
   command: string;
@@ -49,6 +50,7 @@ USAGE:
   wtm <command> [args] [flags]
 
 COMMANDS:
+  init <url> [path]                     Clone repo as wtm-managed bare repository
   create <name> --from <base_branch>    Create a new worktree and spawn shell
   checkout <name>                       Create worktree from remote branch
   list                                  List all worktrees
@@ -62,6 +64,8 @@ CLEANUP OPTIONS:
   --yes                                 Delete all merged worktrees without prompting
 
 EXAMPLES:
+  wtm init git@github.com:user/repo.git Clone and setup bare repo structure
+  wtm init git@gitlab.com:org/repo.git myrepo  Clone with custom directory name
   wtm create feature-auth --from main   Create worktree from main (spawns new shell)
   wtm create hotfix-123 --from master   Create worktree from master
   wtm checkout feature-auth             Create worktree from remote branch feature-auth
@@ -108,6 +112,10 @@ export async function runCommand(parsedArgs: CliArgs): Promise<void> {
 
       case 'cleanup':
         await handleCleanup(flags);
+        break;
+
+      case 'init':
+        await handleInit(args);
         break;
 
       case 'help':
@@ -170,4 +178,16 @@ async function handleCleanup(flags: Record<string, string | boolean>): Promise<v
     dryRun: !!flags['dry-run'],
     yes: !!flags.yes,
   });
+}
+
+async function handleInit(args: string[]): Promise<void> {
+  const url = args[0];
+  const path = args[1];
+
+  if (!url) {
+    throw new Error("Repository URL is required. Usage: wtm init <url> [path]");
+  }
+
+  const manager = new InitManager();
+  await manager.run(url, path);
 }
