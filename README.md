@@ -11,6 +11,7 @@ Worktree Manager simplifies Git worktree operations, making it easy to work with
 ## ✨ Features
 
 - **Lightning fast** - Built with Bun for maximum performance
+- **Easy setup** - Clone any repo into a wtm-managed bare structure with one command
 - **Bare repository focused** - Designed specifically for bare Git repositories
 - **Smart branch management** - Automatic fetching and branch creation
 - **Automatic cleanup** - Detect and remove merged worktrees safely
@@ -23,8 +24,7 @@ Worktree Manager simplifies Git worktree operations, making it easy to work with
 ### Prerequisites
 
 - [Bun](https://bun.sh/) runtime (v1.0+)
-- Git repository configured as bare (`git config core.bare true`)
-- Git remotes configured (typically `origin`)
+- Git installed and configured
 
 ### Install from npm
 
@@ -67,11 +67,19 @@ bun run dev
 ## 🚀 Quick Start
 
 ```bash
-# Navigate to your bare repository
-cd /path/to/your/bare-repo.git
+# Clone a repository into a wtm-managed bare structure
+wtm init git@github.com:user/myrepo.git
 
-# Create a new worktree from main branch
-# This spawns a new shell in the worktree directory
+# This creates:
+#   myrepo/
+#   ├── .git/           <- bare Git internals
+#   ├── post_create     <- hook template
+#   └── main/           <- initial worktree (auto-created)
+
+# Start working in the initial worktree
+cd myrepo/main
+
+# Create a new feature worktree
 wtm create feature-auth --from main
 
 # Work on your feature in the new shell...
@@ -83,11 +91,46 @@ exit
 # Back in the bare repository, list all worktrees
 wtm list
 
-# Clean up the worktree
-wtm delete feature-auth
+# Clean up merged worktrees
+wtm cleanup
 ```
 
 ## 📖 Command Reference
+
+### `wtm init <url> [path]`
+
+Clones a repository into a wtm-managed bare repository structure.
+
+```bash
+# Clone using repo name as directory
+wtm init git@github.com:user/myrepo.git
+
+# Clone with custom directory name
+wtm init git@gitlab.com:org/platform.git myproject
+```
+
+**What it does:**
+
+1. Extracts repository name from URL (or uses provided path)
+2. Creates directory with `.git/` subdirectory for bare Git data
+3. Clones the repository as a bare clone
+4. Configures fetch refspec for all branches
+5. Creates a template `post_create` hook
+6. Detects the default branch (from origin/HEAD, or main/master)
+7. Creates an initial worktree for the default branch
+
+**Final structure:**
+```
+myrepo/
+├── .git/              <- bare Git internals
+├── post_create        <- template hook (executable)
+└── main/              <- initial worktree for default branch
+```
+
+**Supported URL formats:**
+- `git@github.com:user/repo.git` (SSH)
+- `https://github.com/user/repo.git` (HTTPS)
+- `ssh://git@gitlab.com/org/repo.git` (SSH with protocol)
 
 ### `wtm create <name> --from <base_branch>`
 
@@ -301,6 +344,7 @@ wtm create test-feature --from main
 worktree-manager/
 ├── src/
 │   ├── cli.ts           # Command parsing and routing
+│   ├── init.ts          # Repository initialization
 │   ├── worktree.ts      # Core worktree operations
 │   ├── cleanup.ts       # Cleanup detection and UI
 │   └── hooks.ts         # Hook execution system
@@ -311,6 +355,7 @@ worktree-manager/
 
 **Key Components:**
 
+- **InitManager**: Clones repos into wtm-managed bare structure
 - **WorktreeManager**: Core class handling Git operations
 - **CleanupManager**: Detects merged worktrees and handles cleanup flow
 - **HookManager**: Executes lifecycle hooks with proper environment
