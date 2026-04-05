@@ -42,9 +42,9 @@ All checks run before any mutation. If any fail, the repo is untouched.
 1. **Collect non-git entries** — everything in repo root except `.git/` and `.wtm-adopt-tmp/` (excluded defensively, though step 8 of validation already checks it doesn't exist).
 2. **Move to temp dir** — move all entries to `<repo>/.wtm-adopt-tmp/`. Same filesystem ensures atomic renames.
 3. **Set bare** — `git config core.bare true`.
-4. **Configure fetch refspec** — `git config remote.origin.fetch "+refs/heads/*:refs/remotes/origin/*"`.
+4. **Configure fetch refspec** — `git config remote.origin.fetch "+refs/heads/*:refs/remotes/origin/*"`. Implementation note: this is a no-op for adopt (normal clones already have this refspec). Included for symmetry with the clone flow as a consistency guarantee.
 5. **Fetch** — `git fetch origin` to ensure remote tracking refs are current.
-6. **Create worktree** — `git worktree add <branch-dir> <branch>` where `<branch>` is the branch the user was on. Git creates the directory with correct tracked files and linked index.
+6. **Create worktree** — `git worktree add <branch-dir> <branch>` where `<branch>` is the local branch name the user was on (NOT `origin/<branch>` — unlike the clone flow in `init.ts:109`, adopt must use the local branch to preserve local commits not yet on the remote).
 7. **Restore non-tracked files** — recursively copy from `.wtm-adopt-tmp/` into the worktree dir using no-clobber semantics (`cp -rn` or equivalent). This preserves gitignored and untracked files that `git worktree add` didn't recreate, including those nested inside tracked directories (e.g., `src/.cache/`). Files already created by git are left untouched. Safety note: this step is safe because the clean-tree validation (step 5) guarantees tracked files in temp are identical to what git checked out — no-clobber simply skips them.
 8. **Remove temp dir** — delete `.wtm-adopt-tmp/`.
 9. **Create `post_create` hook** — reuse existing `createPostCreateHook`. Skip if one already exists.
