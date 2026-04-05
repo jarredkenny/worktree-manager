@@ -193,3 +193,31 @@ describe("adopt conversion", () => {
     expect(refspec.trim()).toBe("+refs/heads/*:refs/remotes/origin/*");
   });
 });
+
+describe("adopt error recovery", () => {
+  test("reverts to original state when conversion fails", async () => {
+    tempRepo = await createTempRepo();
+
+    // Corrupt remote URL — validation passes (just reads config) but fetch
+    // fails during conversion, triggering error recovery
+    await $`git remote set-url origin /nonexistent`
+      .cwd(tempRepo.repoPath)
+      .quiet();
+
+    const manager = new InitManager();
+    await expect(manager.adopt(tempRepo.repoPath)).rejects.toThrow();
+
+    // Repo should be back to non-bare
+    const isBare = await $`git config --get core.bare`
+      .cwd(tempRepo.repoPath)
+      .quiet()
+      .text();
+    expect(isBare.trim()).toBe("false");
+
+    // Original files should be back
+    expect(existsSync(join(tempRepo.repoPath, "README.md"))).toBe(true);
+
+    // Temp dir should be cleaned up
+    expect(existsSync(join(tempRepo.repoPath, ".wtm-adopt-tmp"))).toBe(false);
+  });
+});
