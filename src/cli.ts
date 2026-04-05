@@ -52,6 +52,7 @@ USAGE:
 COMMANDS:
   init <url> [path]                     Clone repo as wtm-managed bare repository
   create <name> --from <base_branch>    Create a new worktree and spawn shell
+                        --no-shell      Create worktree without spawning shell
   checkout <name>                       Create worktree from remote branch
   list                                  List all worktrees
   delete <name> [--force]               Delete a worktree
@@ -132,6 +133,7 @@ export async function runCommand(parsedArgs: CliArgs): Promise<void> {
 async function handleCreate(manager: WorktreeManager, args: string[], flags: Record<string, string | boolean>): Promise<void> {
   const name = args[0];
   const baseBranch = flags.from as string;
+  const noShell = !!flags['no-shell'];
 
   if (!name) {
     throw new Error("Worktree name is required. Usage: wtm create <name> --from <base_branch>");
@@ -141,7 +143,7 @@ async function handleCreate(manager: WorktreeManager, args: string[], flags: Rec
     throw new Error("Base branch is required. Usage: wtm create <name> --from <base_branch>");
   }
 
-  await manager.createWorktree(name, baseBranch);
+  await manager.createWorktree(name, baseBranch, { noShell });
 }
 
 async function handleCheckout(manager: WorktreeManager, args: string[]): Promise<void> {

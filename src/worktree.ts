@@ -59,7 +59,7 @@ export class WorktreeManager {
     return commitHash;
   }
 
-  async createWorktree(name: string, baseBranch: string): Promise<void> {
+  async createWorktree(name: string, baseBranch: string, opts?: { noShell?: boolean }): Promise<void> {
     await this.ensureBareRepo();
 
     // Fetch and verify we have the latest from remote
@@ -95,6 +95,8 @@ export class WorktreeManager {
       baseBranch,
       bareRepoPath: this.cwd
     });
+
+    if (opts?.noShell) return;
 
     // Fork a new shell in the worktree directory
     try {
