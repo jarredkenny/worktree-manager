@@ -1,4 +1,6 @@
 import { $ } from "bun";
+import { readdir, rename, cp, rm, stat, mkdir } from "node:fs/promises";
+import { resolve, join } from "node:path";
 
 export class InitManager {
   /**
@@ -116,6 +118,159 @@ echo "Setting up worktree: $WORKTREE_NAME"
         console.warn(`  ${error.message}`);
       }
     }
+  }
+
+  /**
+   * Adopt an existing git repository into wtm-managed bare structure.
+   */
+  async adopt(path?: string): Promise<void> {
+    const targetDir = resolve(path ?? process.cwd());
+    const gitDir = join(targetDir, ".git");
+
+    // --- Validation (no filesystem changes) ---
+    await this.validateForAdopt(targetDir, gitDir);
+
+    const currentBranch = (
+      await $`git branch --show-current`.cwd(targetDir).quiet().text()
+    ).trim();
+
+    const defaultBranch = await this.detectDefaultBranch(gitDir);
+
+    console.log(`Adopting repository: ${targetDir}`);
+    console.log(`Current branch: ${currentBranch}`);
+    console.log(`Default branch: ${defaultBranch}`);
+
+    // --- Conversion (with error recovery) ---
+    await this.convertToBare(targetDir, gitDir, currentBranch);
+
+    // Create post_create hook (skip if exists)
+    const hookPath = join(targetDir, "post_create");
+    const hookExists = await Bun.file(hookPath).exists();
+    if (!hookExists) {
+      await this.createPostCreateHook(targetDir);
+      console.log("Created post_create hook template");
+    }
+
+    // Success output
+    const worktreePath = join(targetDir, currentBranch);
+    console.log("");
+    console.log("Repository adopted successfully!");
+    console.log("");
+    console.log(`Your code is now at: ${worktreePath}`);
+    console.log(`Bare repository at:  ${gitDir}`);
+    console.log("");
+    console.log("Next steps:");
+    console.log(`  cd ${currentBranch}`);
+    console.log(`  wtm create <name> --from ${currentBranch}`);
+    console.log("  wtm list");
+  }
+
+  private async validateForAdopt(
+    targetDir: string,
+    gitDir: string
+  ): Promise<void> {
+    // 1. Confirm .git/ exists as a directory (not a file)
+    try {
+      const gitStat = await stat(gitDir);
+      if (!gitStat.isDirectory()) {
+        throw new Error(
+          "Not a git repository — .git is a file (this is already a worktree)."
+        );
+      }
+    } catch (err) {
+      if (err instanceof Error && err.message.includes(".git is a file")) {
+        throw err;
+      }
+      throw new Error(
+        `Not a git repository: ${targetDir} (no .git directory found)`
+      );
+    }
+
+    // 2. Confirm not already bare
+    try {
+      const bareResult = await $`git config --get core.bare`
+        .cwd(targetDir)
+        .quiet()
+        .text();
+      if (bareResult.trim() === "true") {
+        throw new Error(
+          "This is already a bare repository. If it's wtm-managed, use wtm commands directly."
+        );
+      }
+    } catch (err) {
+      if (err instanceof Error && err.message.includes("already a bare")) {
+        throw err;
+      }
+      // core.bare not set means it's not bare — continue
+    }
+
+    // 3. Confirm remote exists
+    try {
+      await $`git remote get-url origin`.cwd(targetDir).quiet();
+    } catch {
+      throw new Error(
+        "No remote 'origin' found. wtm requires a remote to function. Add one with: git remote add origin <url>"
+      );
+    }
+
+    // 4. Confirm clean working tree
+    const unstaged = await $`git diff --quiet`.cwd(targetDir).quiet().nothrow();
+    const staged = await $`git diff --cached --quiet`
+      .cwd(targetDir)
+      .quiet()
+      .nothrow();
+    if (unstaged.exitCode !== 0 || staged.exitCode !== 0) {
+      throw new Error(
+        "Working tree has uncommitted changes. Please commit or stash before running wtm init."
+      );
+    }
+
+    // 5. Check for existing worktrees
+    const worktreeOutput = await $`git worktree list --porcelain`
+      .cwd(targetDir)
+      .quiet()
+      .text();
+    const worktreeBlocks = worktreeOutput
+      .split("\n\n")
+      .filter((b) => b.trim());
+    if (worktreeBlocks.length > 1) {
+      throw new Error(
+        "Repository has existing worktrees. Please remove them before running wtm init."
+      );
+    }
+
+    // 6. Confirm not detached HEAD
+    const branchName = (
+      await $`git branch --show-current`.cwd(targetDir).quiet().text()
+    ).trim();
+    if (!branchName) {
+      throw new Error(
+        "HEAD is detached. Please checkout a branch before running wtm init."
+      );
+    }
+
+    // 7. Check for stale temp dir
+    const tmpDir = join(targetDir, ".wtm-adopt-tmp");
+    try {
+      await stat(tmpDir);
+      throw new Error(
+        "Found .wtm-adopt-tmp/ — a previous adopt may have failed. Please inspect and remove it manually."
+      );
+    } catch (err) {
+      if (err instanceof Error && err.message.includes(".wtm-adopt-tmp")) {
+        throw err;
+      }
+      // Doesn't exist — good
+    }
+  }
+
+  private async convertToBare(
+    targetDir: string,
+    gitDir: string,
+    currentBranch: string
+  ): Promise<void> {
+    // Stub — implemented in Task 3
+    throw new Error("convertToBare not implemented");
   }
 
   /**
