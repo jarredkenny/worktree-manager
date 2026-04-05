@@ -221,3 +221,40 @@ describe("adopt error recovery", () => {
     expect(existsSync(join(tempRepo.repoPath, ".wtm-adopt-tmp"))).toBe(false);
   });
 });
+
+describe("command routing", () => {
+  test("handleInit adopts when given an existing directory", async () => {
+    tempRepo = await createTempRepo();
+    const manager = new InitManager();
+
+    // Calling adopt directly with a path that is an existing directory
+    await manager.adopt(tempRepo.repoPath);
+
+    const isBare = await $`git config --get core.bare`
+      .cwd(tempRepo.repoPath)
+      .quiet()
+      .text();
+    expect(isBare.trim()).toBe("true");
+  });
+
+  test("isExistingRepo returns true for git directory", async () => {
+    tempRepo = await createTempRepo();
+    const manager = new InitManager();
+    const result = await manager.isExistingRepo(tempRepo.repoPath);
+    expect(result).toBe(true);
+  });
+
+  test("isExistingRepo returns false for non-existent path", async () => {
+    const manager = new InitManager();
+    const result = await manager.isExistingRepo("/tmp/nonexistent-path-xyz");
+    expect(result).toBe(false);
+  });
+
+  test("isExistingRepo returns false for URL-like string", async () => {
+    const manager = new InitManager();
+    const result = await manager.isExistingRepo(
+      "git@github.com:user/repo.git"
+    );
+    expect(result).toBe(false);
+  });
+});

@@ -183,13 +183,23 @@ async function handleCleanup(flags: Record<string, string | boolean>): Promise<v
 }
 
 async function handleInit(args: string[]): Promise<void> {
-  const url = args[0];
-  const path = args[1];
+  const manager = new InitManager();
+  const firstArg = args[0];
 
-  if (!url) {
-    throw new Error("Repository URL is required. Usage: wtm init <url> [path]");
+  if (!firstArg) {
+    // No args — adopt cwd
+    await manager.adopt();
+    return;
   }
 
-  const manager = new InitManager();
+  // Check if first arg is an existing directory (adopt flow)
+  if (await manager.isExistingRepo(firstArg)) {
+    await manager.adopt(firstArg);
+    return;
+  }
+
+  // Otherwise treat as URL (clone flow)
+  const url = firstArg;
+  const path = args[1];
   await manager.run(url, path);
 }

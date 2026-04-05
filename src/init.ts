@@ -121,6 +121,22 @@ echo "Setting up worktree: $WORKTREE_NAME"
   }
 
   /**
+   * Check if a string refers to an existing directory containing a git repo.
+   * Used by CLI routing to distinguish adopt vs clone.
+   */
+  async isExistingRepo(pathOrUrl: string): Promise<boolean> {
+    try {
+      const resolved = resolve(pathOrUrl);
+      const s = await stat(resolved);
+      if (!s.isDirectory()) return false;
+      const gitStat = await stat(join(resolved, ".git"));
+      return gitStat.isDirectory() || gitStat.isFile();
+    } catch {
+      return false;
+    }
+  }
+
+  /**
    * Adopt an existing git repository into wtm-managed bare structure.
    */
   async adopt(path?: string): Promise<void> {
