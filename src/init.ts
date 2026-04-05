@@ -253,14 +253,18 @@ echo "Setting up worktree: $WORKTREE_NAME"
     const tmpDir = join(targetDir, ".wtm-adopt-tmp");
     try {
       await stat(tmpDir);
+      // stat succeeded — dir exists, which is a problem
       throw new Error(
         "Found .wtm-adopt-tmp/ — a previous adopt may have failed. Please inspect and remove it manually."
       );
     } catch (err) {
-      if (err instanceof Error && err.message.includes(".wtm-adopt-tmp")) {
+      if (
+        err instanceof Error &&
+        err.message.startsWith("Found .wtm-adopt-tmp/")
+      ) {
         throw err;
       }
-      // Doesn't exist — good
+      // ENOENT or similar — dir doesn't exist, good
     }
   }
 
@@ -269,8 +273,73 @@ echo "Setting up worktree: $WORKTREE_NAME"
     gitDir: string,
     currentBranch: string
   ): Promise<void> {
-    // Stub — implemented in Task 3
-    throw new Error("convertToBare not implemented");
+    const tmpDir = join(targetDir, ".wtm-adopt-tmp");
+    const worktreePath = join(targetDir, currentBranch);
+    let bareSet = false;
+    let worktreeCreated = false;
+
+    try {
+      // 1. Collect and move non-git entries to temp dir
+      await mkdir(tmpDir);
+      const entries = await readdir(targetDir);
+      for (const entry of entries) {
+        if (entry === ".git" || entry === ".wtm-adopt-tmp") continue;
+        await rename(join(targetDir, entry), join(tmpDir, entry));
+      }
+
+      // 2. Set bare
+      await $`git config core.bare true`.cwd(targetDir).quiet();
+      bareSet = true;
+
+      // 3. Configure fetch refspec (no-op for most clones, consistency guarantee)
+      await $`git config remote.origin.fetch "+refs/heads/*:refs/remotes/origin/*"`
+        .cwd(targetDir)
+        .quiet();
+
+      // 4. Fetch
+      await $`git --git-dir=${gitDir} fetch origin`.quiet();
+
+      // 5. Create worktree using LOCAL branch (preserves unpushed commits)
+      await $`git --git-dir=${gitDir} worktree add ${worktreePath} ${currentBranch}`.quiet();
+      worktreeCreated = true;
+
+      // 6. Restore non-tracked files (no-clobber recursive copy)
+      await cp(tmpDir, worktreePath, { recursive: true, force: false });
+
+      // 7. Remove temp dir
+      await rm(tmpDir, { recursive: true, force: true });
+    } catch (err) {
+      // Error recovery: revert to original state
+      console.error("Adopt failed, reverting changes...");
+
+      if (worktreeCreated) {
+        await $`git --git-dir=${gitDir} worktree remove ${worktreePath} --force`
+          .quiet()
+          .nothrow();
+        await rm(worktreePath, { recursive: true, force: true }).catch(
+          () => {}
+        );
+      }
+
+      if (bareSet) {
+        await $`git config core.bare false`.cwd(targetDir).quiet().nothrow();
+      }
+
+      // Move files back from temp
+      try {
+        const tmpEntries = await readdir(tmpDir);
+        for (const entry of tmpEntries) {
+          await rename(join(tmpDir, entry), join(targetDir, entry));
+        }
+        await rm(tmpDir, { recursive: true, force: true });
+      } catch {
+        // Temp dir may not exist if failure was before the move
+      }
+
+      throw new Error(
+        `Failed to adopt repository: ${err instanceof Error ? err.message : err}`
+      );
+    }
   }
 
   /**

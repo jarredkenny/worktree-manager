@@ -4,6 +4,7 @@ import { InitManager } from "../src/init";
 import { $ } from "bun";
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
+import { existsSync } from "node:fs";
 
 let tempRepo: TempRepo;
 
@@ -78,5 +79,117 @@ describe("adopt validation", () => {
 
     const manager = new InitManager();
     await expect(manager.adopt(tempRepo.repoPath)).rejects.toThrow(".wtm-adopt-tmp");
+  });
+});
+
+describe("adopt conversion", () => {
+  test("converts standard repo to bare with worktree", async () => {
+    tempRepo = await createTempRepo();
+    const manager = new InitManager();
+    await manager.adopt(tempRepo.repoPath);
+
+    // Repo is now bare
+    const isBare = await $`git config --get core.bare`
+      .cwd(tempRepo.repoPath)
+      .quiet()
+      .text();
+    expect(isBare.trim()).toBe("true");
+
+    // Worktree exists at <repo>/main/
+    const worktreePath = join(tempRepo.repoPath, "main");
+    expect(existsSync(worktreePath)).toBe(true);
+
+    // README.md exists in worktree
+    expect(existsSync(join(worktreePath, "README.md"))).toBe(true);
+
+    // Worktree is registered with git
+    const wtList = await $`git worktree list --porcelain`
+      .cwd(tempRepo.repoPath)
+      .quiet()
+      .text();
+    expect(wtList).toContain(worktreePath);
+
+    // No temp dir left behind
+    expect(existsSync(join(tempRepo.repoPath, ".wtm-adopt-tmp"))).toBe(false);
+  });
+
+  test("preserves gitignored files", async () => {
+    tempRepo = await createTempRepo();
+
+    // Add .gitignore and an ignored file
+    await $`echo "ignored.txt" > .gitignore`.cwd(tempRepo.repoPath).quiet();
+    await $`git add .gitignore`.cwd(tempRepo.repoPath).quiet();
+    await $`git commit -m "add gitignore"`.cwd(tempRepo.repoPath).quiet();
+    await $`git push origin main`.cwd(tempRepo.repoPath).quiet();
+    await $`echo "secret" > ignored.txt`.cwd(tempRepo.repoPath).quiet();
+
+    const manager = new InitManager();
+    await manager.adopt(tempRepo.repoPath);
+
+    const worktreePath = join(tempRepo.repoPath, "main");
+    const content = await Bun.file(join(worktreePath, "ignored.txt")).text();
+    expect(content.trim()).toBe("secret");
+  });
+
+  test("preserves untracked files", async () => {
+    tempRepo = await createTempRepo();
+    await $`echo "notes" > untracked.txt`.cwd(tempRepo.repoPath).quiet();
+
+    const manager = new InitManager();
+    await manager.adopt(tempRepo.repoPath);
+
+    const worktreePath = join(tempRepo.repoPath, "main");
+    const content = await Bun.file(join(worktreePath, "untracked.txt")).text();
+    expect(content.trim()).toBe("notes");
+  });
+
+  test("preserves local unpushed commits", async () => {
+    tempRepo = await createTempRepo();
+
+    // Create a local-only commit
+    await $`echo "local work" > local.txt`.cwd(tempRepo.repoPath).quiet();
+    await $`git add local.txt`.cwd(tempRepo.repoPath).quiet();
+    await $`git commit -m "local commit"`.cwd(tempRepo.repoPath).quiet();
+    // Deliberately NOT pushing
+
+    const manager = new InitManager();
+    await manager.adopt(tempRepo.repoPath);
+
+    const worktreePath = join(tempRepo.repoPath, "main");
+    // local.txt should exist in worktree (from the local commit)
+    const content = await Bun.file(join(worktreePath, "local.txt")).text();
+    expect(content.trim()).toBe("local work");
+
+    // Verify the commit is in the log
+    const log = await $`git log --oneline`
+      .cwd(worktreePath)
+      .quiet()
+      .text();
+    expect(log).toContain("local commit");
+  });
+
+  test("creates post_create hook template", async () => {
+    tempRepo = await createTempRepo();
+    const manager = new InitManager();
+    await manager.adopt(tempRepo.repoPath);
+
+    const hookPath = join(tempRepo.repoPath, "post_create");
+    expect(existsSync(hookPath)).toBe(true);
+
+    const content = await Bun.file(hookPath).text();
+    expect(content).toContain("#!/bin/bash");
+    expect(content).toContain("WORKTREE_DIR");
+  });
+
+  test("configures fetch refspec", async () => {
+    tempRepo = await createTempRepo();
+    const manager = new InitManager();
+    await manager.adopt(tempRepo.repoPath);
+
+    const refspec = await $`git config --get remote.origin.fetch`
+      .cwd(tempRepo.repoPath)
+      .quiet()
+      .text();
+    expect(refspec.trim()).toBe("+refs/heads/*:refs/remotes/origin/*");
   });
 });
