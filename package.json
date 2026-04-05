@@ -12,6 +12,7 @@
     "start": "bun run index.ts",
     "dev": "bun --watch index.ts",
     "build": "bun build index.ts --outdir ./dist --target bun --format esm",
+    "test": "bun test",
     "link": "bun link",
     "unlink": "bun unlink"
   },
