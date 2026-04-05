@@ -144,13 +144,14 @@ echo "Setting up worktree: $WORKTREE_NAME"
     const gitDir = join(targetDir, ".git");
 
     // --- Validation (no filesystem changes) ---
-    await this.validateForAdopt(targetDir, gitDir);
+    const currentBranch = await this.validateForAdopt(targetDir, gitDir);
 
-    const currentBranch = (
-      await $`git branch --show-current`.cwd(targetDir).quiet().text()
-    ).trim();
-
-    const defaultBranch = await this.detectDefaultBranch(gitDir);
+    let defaultBranch = "unknown";
+    try {
+      defaultBranch = await this.detectDefaultBranch(gitDir);
+    } catch {
+      // Best-effort — default branch detection is not needed for conversion
+    }
 
     console.log(`Adopting repository: ${targetDir}`);
     console.log(`Current branch: ${currentBranch}`);
@@ -184,7 +185,7 @@ echo "Setting up worktree: $WORKTREE_NAME"
   private async validateForAdopt(
     targetDir: string,
     gitDir: string
-  ): Promise<void> {
+  ): Promise<string> {
     // 1. Confirm .git/ exists as a directory (not a file)
     try {
       const gitStat = await stat(gitDir);
@@ -282,6 +283,8 @@ echo "Setting up worktree: $WORKTREE_NAME"
       }
       // ENOENT or similar — dir doesn't exist, good
     }
+
+    return branchName;
   }
 
   private async convertToBare(
