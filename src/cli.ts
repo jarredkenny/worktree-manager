@@ -51,6 +51,7 @@ USAGE:
 
 COMMANDS:
   init <url> [path]                     Clone repo as wtm-managed bare repository
+  init [path]                           Adopt existing repo into wtm structure
   create <name> --from <base_branch>    Create a new worktree and spawn shell
                         --no-shell      Create worktree without spawning shell
   checkout <name>                       Create worktree from remote branch
@@ -67,6 +68,8 @@ CLEANUP OPTIONS:
 EXAMPLES:
   wtm init git@github.com:user/repo.git Clone and setup bare repo structure
   wtm init git@gitlab.com:org/repo.git myrepo  Clone with custom directory name
+  wtm init                              Adopt current repo into wtm structure
+  wtm init ~/projects/myrepo            Adopt existing repo at path
   wtm create feature-auth --from main   Create worktree from main (spawns new shell)
   wtm create hotfix-123 --from master   Create worktree from master
   wtm checkout feature-auth             Create worktree from remote branch feature-auth
@@ -86,6 +89,7 @@ FEATURES:
   • Safe deletion with confirmation prompts
   • Clear status and error messages
   • Hook system: place executable scripts in bare repo root (e.g., post_create)
+  • Adopt existing repos without re-cloning
 `);
 }
 
