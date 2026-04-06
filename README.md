@@ -146,7 +146,7 @@ wtm init ~/projects/myrepo
 1. Validates the repo (clean working tree, has remote, not already bare, no detached HEAD)
 2. Moves all files to a temporary directory
 3. Converts `.git/` to bare mode
-4. Creates a worktree for the current branch via `git worktree add`
+4. Creates a worktree named after your current branch (e.g., on `main` → `myrepo/main/`)
 5. Restores gitignored and untracked files into the worktree
 6. Creates a template `post_create` hook
 7. If anything fails, automatically reverts to the original state
@@ -160,7 +160,7 @@ wtm init ~/projects/myrepo
 myrepo/
 ├── .git/              <- bare Git internals
 ├── post_create        <- template hook (executable)
-└── main/              <- worktree for your branch
+└── main/              <- worktree (named after your checked-out branch)
 ```
 
 ### `wtm create <name> --from <base_branch>`
