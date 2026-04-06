@@ -11,7 +11,7 @@ Worktree Manager simplifies Git worktree operations, making it easy to work with
 ## ✨ Features
 
 - **Lightning fast** - Built with Bun for maximum performance
-- **Easy setup** - Clone any repo into a wtm-managed bare structure with one command
+- **Easy setup** - Clone or adopt any repo into a wtm-managed bare structure with one command
 - **Bare repository focused** - Designed specifically for bare Git repositories
 - **Smart branch management** - Automatic fetching and branch creation
 - **Automatic cleanup** - Detect and remove merged worktrees safely
@@ -70,13 +70,17 @@ bun run dev
 # Clone a repository into a wtm-managed bare structure
 wtm init git@github.com:user/myrepo.git
 
-# This creates:
+# Or adopt an existing repo you've already cloned
+cd ~/projects/existing-repo
+wtm init
+
+# Either way, you end up with:
 #   myrepo/
 #   ├── .git/           <- bare Git internals
 #   ├── post_create     <- hook template
-#   └── main/           <- initial worktree (auto-created)
+#   └── main/           <- worktree with your code
 
-# Start working in the initial worktree
+# Start working in the worktree
 cd myrepo/main
 
 # Create a new feature worktree
@@ -97,7 +101,7 @@ wtm cleanup
 
 ## 📖 Command Reference
 
-### `wtm init <url> [path]`
+### `wtm init <url> [path]` — Clone
 
 Clones a repository into a wtm-managed bare repository structure.
 
@@ -119,18 +123,45 @@ wtm init git@gitlab.com:org/platform.git myproject
 6. Detects the default branch (from origin/HEAD, or main/master)
 7. Creates an initial worktree for the default branch
 
-**Final structure:**
-```
-myrepo/
-├── .git/              <- bare Git internals
-├── post_create        <- template hook (executable)
-└── main/              <- initial worktree for default branch
-```
-
 **Supported URL formats:**
 - `git@github.com:user/repo.git` (SSH)
 - `https://github.com/user/repo.git` (HTTPS)
 - `ssh://git@gitlab.com/org/repo.git` (SSH with protocol)
+
+### `wtm init [path]` — Adopt
+
+Converts an existing git repository into wtm's bare-repo-with-worktrees structure, in place.
+
+```bash
+# Adopt the repo you're currently in
+cd ~/projects/myrepo
+wtm init
+
+# Or point at a repo by path
+wtm init ~/projects/myrepo
+```
+
+**What it does:**
+
+1. Validates the repo (clean working tree, has remote, not already bare, no detached HEAD)
+2. Moves all files to a temporary directory
+3. Converts `.git/` to bare mode
+4. Creates a worktree for the current branch via `git worktree add`
+5. Restores gitignored and untracked files into the worktree
+6. Creates a template `post_create` hook
+7. If anything fails, automatically reverts to the original state
+
+**Preserves:** gitignored files (`.env`, `node_modules`), untracked files, and local unpushed commits.
+
+**Requires:** clean working tree — commit or stash uncommitted changes first.
+
+**Final structure (both clone and adopt):**
+```
+myrepo/
+├── .git/              <- bare Git internals
+├── post_create        <- template hook (executable)
+└── main/              <- worktree for your branch
+```
 
 ### `wtm create <name> --from <base_branch>`
 
@@ -355,7 +386,7 @@ worktree-manager/
 
 **Key Components:**
 
-- **InitManager**: Clones repos into wtm-managed bare structure
+- **InitManager**: Clones or adopts repos into wtm-managed bare structure
 - **WorktreeManager**: Core class handling Git operations
 - **CleanupManager**: Detects merged worktrees and handles cleanup flow
 - **HookManager**: Executes lifecycle hooks with proper environment
