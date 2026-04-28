@@ -14,7 +14,7 @@ export class WorktreeManager {
 
   constructor(cwd: string = process.cwd()) {
     this.cwd = cwd;
-    this.hookManager = new HookManager(cwd);
+    this.hookManager = new HookManager();
   }
 
   async ensureBareRepo(): Promise<void> {

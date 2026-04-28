@@ -10,30 +10,16 @@ export interface HookContext {
 }
 
 export class HookManager {
-  private bareRepoPath: string;
-
-  constructor(bareRepoPath: string) {
-    this.bareRepoPath = bareRepoPath;
-  }
-
-  private getHookPath(hookName: string): string {
-    return join(this.bareRepoPath, hookName);
-  }
-
-  private hookExists(hookName: string): boolean {
-    return existsSync(this.getHookPath(hookName));
-  }
-
   async executeHook(hookName: string, context: HookContext): Promise<void> {
-    const hookPath = this.getHookPath(hookName);
-    
-    if (!this.hookExists(hookName)) {
-      return; // Hook doesn't exist, silently continue
+    const hookPath = join(context.worktreePath, ".wtm", hookName);
+
+    if (!existsSync(hookPath)) {
+      return;
     }
 
     try {
       console.log(`🪝 Running ${hookName} hook...`);
-      
+
       const env = {
         ...process.env,
         WORKTREE_DIR: context.worktreePath,
@@ -43,7 +29,7 @@ export class HookManager {
       };
 
       await $`bash ${hookPath}`.env(env).cwd(context.worktreePath);
-      
+
       console.log(`✅ ${hookName} hook completed successfully`);
     } catch (error) {
       console.error(`❌ ${hookName} hook failed: ${error}`);

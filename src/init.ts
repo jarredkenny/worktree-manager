@@ -68,36 +68,6 @@ export class InitManager {
   }
 
   /**
-   * Create a template post_create hook script.
-   */
-  private async createPostCreateHook(targetDir: string): Promise<void> {
-    const hookPath = `${targetDir}/post_create`;
-    const hookContent = `#!/bin/bash
-# wtm post_create hook
-# Runs after each worktree is created, with cwd set to the new worktree.
-#
-# Available environment variables:
-#   WORKTREE_DIR   - Absolute path to the new worktree
-#   WORKTREE_NAME  - Name of the worktree
-#   BASE_BRANCH    - Branch the worktree was created from
-#   BARE_REPO_PATH - Path to the bare repository
-
-echo "Setting up worktree: $WORKTREE_NAME"
-
-# Example: Install dependencies
-# if [ -f "package.json" ]; then
-#     pnpm install
-# fi
-
-# Example: Copy environment files
-# cp "$BARE_REPO_PATH/.env.example" ".env"
-`;
-
-    await Bun.write(hookPath, hookContent);
-    await $`chmod +x ${hookPath}`.quiet();
-  }
-
-  /**
    * Create the initial worktree for the default branch.
    */
   private async createInitialWorktree(
@@ -159,14 +129,6 @@ echo "Setting up worktree: $WORKTREE_NAME"
 
     // --- Conversion (with error recovery) ---
     await this.convertToBare(targetDir, gitDir, currentBranch);
-
-    // Create post_create hook (skip if exists)
-    const hookPath = join(targetDir, "post_create");
-    const hookExists = await Bun.file(hookPath).exists();
-    if (!hookExists) {
-      await this.createPostCreateHook(targetDir);
-      console.log("Created post_create hook template");
-    }
 
     // Success output
     const worktreePath = join(targetDir, currentBranch);
@@ -392,10 +354,6 @@ echo "Setting up worktree: $WORKTREE_NAME"
     console.log("Fetching all branches...");
     await $`git --git-dir=${gitDir} fetch origin`.quiet();
 
-    // Create template post_create hook
-    await this.createPostCreateHook(targetDir);
-    console.log("Created post_create hook template");
-
     // Detect default branch
     const defaultBranch = await this.detectDefaultBranch(gitDir);
     console.log(`Detected default branch: ${defaultBranch}`);
@@ -413,7 +371,7 @@ echo "Setting up worktree: $WORKTREE_NAME"
     console.log("  wtm list                    # List all worktrees");
     console.log("");
     console.log(
-      `Customize ${targetDir}/post_create to run setup commands after worktree creation.`
+      `To run setup commands after worktree creation, commit a script to .wtm/post_create on your base branch.`
     );
   }
 }

@@ -77,7 +77,6 @@ wtm init
 # Either way, you end up with:
 #   myrepo/
 #   ├── .git/           <- bare Git internals
-#   ├── post_create     <- hook template
 #   └── main/           <- worktree with your code
 
 # Start working in the worktree
@@ -119,9 +118,8 @@ wtm init git@gitlab.com:org/platform.git myproject
 2. Creates directory with `.git/` subdirectory for bare Git data
 3. Clones the repository as a bare clone
 4. Configures fetch refspec for all branches
-5. Creates a template `post_create` hook
-6. Detects the default branch (from origin/HEAD, or main/master)
-7. Creates an initial worktree for the default branch
+5. Detects the default branch (from origin/HEAD, or main/master)
+6. Creates an initial worktree for the default branch
 
 **Supported URL formats:**
 - `git@github.com:user/repo.git` (SSH)
@@ -148,8 +146,7 @@ wtm init ~/projects/myrepo
 3. Converts `.git/` to bare mode
 4. Creates a worktree named after your current branch (e.g., on `main` → `myrepo/main/`)
 5. Restores gitignored and untracked files into the worktree
-6. Creates a template `post_create` hook
-7. If anything fails, automatically reverts to the original state
+6. If anything fails, automatically reverts to the original state
 
 **Preserves:** gitignored files (`.env`, `node_modules`), untracked files, and local unpushed commits.
 
@@ -159,7 +156,6 @@ wtm init ~/projects/myrepo
 ```
 myrepo/
 ├── .git/              <- bare Git internals
-├── post_create        <- template hook (executable)
 └── main/              <- worktree (named after your checked-out branch)
 ```
 
@@ -184,7 +180,7 @@ wtm create review-pr --from feature-x
 2. Fetches the latest changes from the base branch
 3. Creates a new branch named `<name>`
 4. Creates a worktree directory at `./<name>`
-5. Executes `post_create` hook if present
+5. Executes the `.wtm/post_create` hook if present in the new worktree
 6. Spawns a new shell session in the worktree directory
 
 **Important:** This command starts a new shell in the worktree. When you're done working, use `exit` to return to your original shell in the bare repository.
@@ -312,26 +308,36 @@ Shows comprehensive help information including examples and features.
 
 ## 🪝 Hook System
 
-Worktree Manager supports executable hooks that run automatically during worktree lifecycle events. Hooks are placed in the bare repository root and must be executable.
+Worktree Manager runs hook scripts at lifecycle events. Hooks live **inside the worktree** under `.wtm/`, so they can be committed to git and shared with the rest of the team — or `.gitignore`d for personal-only setup. Hooks are run with `bash`; the executable bit is not required.
+
+### Discovery
+
+For each hook, wtm looks at exactly one location:
+
+```
+<worktree>/.wtm/<hook-name>
+```
+
+If the file exists, it runs. If not, the hook is a silent no-op. Because hooks are checked out with the rest of the branch's tree, the hook that runs for a new worktree is the version committed on its base branch.
 
 ### Available Hooks
 
 #### `post_create`
 
-Runs immediately after a worktree is created, with the working directory set to the new worktree.
+Runs immediately after a worktree is created (via `wtm create` or `wtm checkout`), with the working directory set to the new worktree.
 
 **Environment Variables:**
 
-- `$WORKTREE_DIR` - Absolute path to the new worktree
-- `$WORKTREE_NAME` - Name of the worktree
-- `$BASE_BRANCH` - Branch the worktree was created from
-- `$BARE_REPO_PATH` - Path to the bare repository
+- `$WORKTREE_DIR` — Absolute path to the new worktree
+- `$WORKTREE_NAME` — Name of the worktree
+- `$BASE_BRANCH` — Branch the worktree was created from
+- `$BARE_REPO_PATH` — Path to the bare repository
 
-**Example post_create hook:**
+**Example `.wtm/post_create`:**
 
 ```bash
 #!/bin/bash
-# File: post_create (in bare repo root)
+# Committed at .wtm/post_create on your base branch
 
 echo "🪝 Setting up new worktree: $WORKTREE_NAME"
 
@@ -347,27 +353,38 @@ if [ -f "$BARE_REPO_PATH/.env.example" ]; then
     cp "$BARE_REPO_PATH/.env.example" ".env"
 fi
 
-# Copy configuration files
-if [ -f "$BARE_REPO_PATH/.vscode/settings.json" ]; then
-    mkdir -p .vscode
-    cp "$BARE_REPO_PATH/.vscode/settings.json" ".vscode/"
-fi
-
 echo "✅ Worktree setup complete!"
 ```
 
-**Setup:**
+**Setup (shared, team hook):**
 
 ```bash
-# Create the hook file in your bare repository
-vim post_create
+# In a worktree on the branch you want to share the hook from (e.g. main)
+mkdir -p .wtm
+$EDITOR .wtm/post_create
+git add .wtm/post_create
+git commit -m "chore: add wtm post_create hook"
+git push
 
-# Make it executable
-chmod +x post_create
-
-# Test by creating a new worktree
+# Test by creating a new worktree from that branch
 wtm create test-feature --from main
 ```
+
+**Setup (personal, untracked hook):**
+
+If you want a hook that only runs on your machine, add `.wtm/post_create` to `.git/info/exclude` (which is per-clone and not committed) before creating the file. wtm will still discover and run it — git just won't track it. Avoid putting `.wtm/` in the repo's `.gitignore`: that would block teammates from sharing hooks via the same path.
+
+### Security
+
+Because `.wtm/post_create` is committed to git, anyone with merge access to a branch you check out can run arbitrary code on your machine the moment you `wtm create` or `wtm checkout` from it. This is the same trust model as `npm install` post-install scripts and any other build scripts in the repo. Treat hook changes with the same care as any other code review.
+
+### Migrating from earlier versions
+
+Earlier versions of wtm looked for hooks at the **bare repository root** (e.g. `<bareRoot>/post_create`). That location is no longer consulted. To migrate:
+
+1. Move your existing hook to `.wtm/post_create` on the branch(es) you want it to run on (commonly your default branch, so new worktrees inherit it).
+2. Commit and push.
+3. Delete the old `<bareRoot>/post_create` file — it is now ignored by wtm and serves no purpose.
 
 ## 🏗️ Architecture
 

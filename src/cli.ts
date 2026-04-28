@@ -88,7 +88,7 @@ FEATURES:
   • Spawns new shell in worktree after creation
   • Safe deletion with confirmation prompts
   • Clear status and error messages
-  • Hook system: place executable scripts in bare repo root (e.g., post_create)
+  • Hook system: commit scripts to .wtm/ in your worktree (e.g., .wtm/post_create)
   • Adopt existing repos without re-cloning
 `);
 }
