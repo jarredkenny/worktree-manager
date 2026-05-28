@@ -29,9 +29,16 @@ export class WorktreeManager {
   }
 
   async fetchBranch(branch: string): Promise<string> {
-    // Get the latest commit hash from remote
-    const remoteCommit = await $`git ls-remote origin ${branch}`.cwd(this.cwd);
-    const commitHash = remoteCommit.stdout.toString().split('\t')[0];
+    // `git ls-remote <pattern>` tail-matches refs, so passing just `<branch>`
+    // also matches suffix-colliding refs like `feat/<branch>`. Scope the
+    // pattern to the fully-qualified ref AND verify by exact ref equality.
+    const remoteLs = await $`git ls-remote --heads origin refs/heads/${branch}`.cwd(this.cwd);
+    const exactRef = `refs/heads/${branch}`;
+    const matchLine = remoteLs.stdout
+      .toString()
+      .split("\n")
+      .find((line) => line.endsWith(`\t${exactRef}`));
+    const commitHash = matchLine?.split("\t")[0];
 
     if (!commitHash) {
       throw new Error(`Remote branch '${branch}' not found on origin`);
@@ -135,47 +142,16 @@ export class WorktreeManager {
     // Worktree doesn't exist, try to create it from remote or local branch
     console.log(`Worktree '${name}' not found. Checking for remote branch...`);
 
-    try {
-      // Check if remote branch exists
-      await $`git ls-remote --heads origin ${name}`.cwd(this.cwd);
-      console.log(`Found remote branch 'origin/${name}'. Creating worktree...`);
+    // Check if the remote branch exists. ls-remote tail-matches refs and
+    // always exits 0 even on no match, so scope to the exact ref and confirm
+    // a matching line came back.
+    const exactRef = `refs/heads/${name}`;
+    const remoteLs = await $`git ls-remote --heads origin ${exactRef}`.cwd(this.cwd).text();
+    const remoteBranchExists = remoteLs
+      .split("\n")
+      .some((line) => line.endsWith(`\t${exactRef}`));
 
-      // Fetch latest changes and create worktree from remote tracking ref
-      await this.fetchBranch(name);
-      const worktreePath = `${this.cwd}/${name}`;
-
-      // Check if local branch already exists
-      const localBranchExists = await $`git show-ref --verify refs/heads/${name}`.cwd(this.cwd).nothrow();
-
-      if (localBranchExists.exitCode === 0) {
-        // Local branch exists, check it out directly (it will track origin/name)
-        await $`git worktree add ${worktreePath} ${name}`.cwd(this.cwd);
-        console.log(
-          `✅ Created worktree '${name}' from existing branch at ${worktreePath}`,
-        );
-      } else {
-        // Local branch doesn't exist, create it from remote tracking ref
-        await $`git worktree add -b ${name} ${worktreePath} origin/${name}`.cwd(this.cwd);
-        console.log(
-          `✅ Created worktree '${name}' from remote branch at ${worktreePath}`,
-        );
-      }
-
-      // Set up remote tracking branch in the worktree
-      await $`git config branch.${name}.remote origin`.cwd(worktreePath);
-      await $`git config branch.${name}.merge refs/heads/${name}`.cwd(worktreePath);
-
-      // Execute post_create hook
-      await this.hookManager.executePostCreateHook({
-        worktreePath,
-        worktreeName: name,
-        baseBranch: name, // using the branch name as base branch in this case
-        bareRepoPath: this.cwd
-      });
-
-      console.log(`💡 To work in this worktree, run: cd ${worktreePath}`);
-    } catch (remoteError) {
-      // Remote branch doesn't exist, show helpful error
+    if (!remoteBranchExists) {
       const availableWorktrees = worktrees
         .filter((w) => !w.isBare)
         .map((w) => w.branch);
@@ -185,6 +161,43 @@ export class WorktreeManager {
           `To create a new worktree: wtm create ${name} --from <base_branch>`,
       );
     }
+
+    console.log(`Found remote branch 'origin/${name}'. Creating worktree...`);
+
+    // Fetch latest changes and create worktree from remote tracking ref
+    await this.fetchBranch(name);
+    const worktreePath = `${this.cwd}/${name}`;
+
+    // Check if local branch already exists
+    const localBranchExists = await $`git show-ref --verify refs/heads/${name}`.cwd(this.cwd).nothrow();
+
+    if (localBranchExists.exitCode === 0) {
+      // Local branch exists, check it out directly (it will track origin/name)
+      await $`git worktree add ${worktreePath} ${name}`.cwd(this.cwd);
+      console.log(
+        `✅ Created worktree '${name}' from existing branch at ${worktreePath}`,
+      );
+    } else {
+      // Local branch doesn't exist, create it from remote tracking ref
+      await $`git worktree add -b ${name} ${worktreePath} origin/${name}`.cwd(this.cwd);
+      console.log(
+        `✅ Created worktree '${name}' from remote branch at ${worktreePath}`,
+      );
+    }
+
+    // Set up remote tracking branch in the worktree
+    await $`git config branch.${name}.remote origin`.cwd(worktreePath);
+    await $`git config branch.${name}.merge refs/heads/${name}`.cwd(worktreePath);
+
+    // Execute post_create hook
+    await this.hookManager.executePostCreateHook({
+      worktreePath,
+      worktreeName: name,
+      baseBranch: name, // using the branch name as base branch in this case
+      bareRepoPath: this.cwd
+    });
+
+    console.log(`💡 To work in this worktree, run: cd ${worktreePath}`);
   }
 
   async listWorktrees(): Promise<WorktreeInfo[]> {
